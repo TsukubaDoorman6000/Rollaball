@@ -6,31 +6,37 @@ using TMPro;
 
 public class PlayerController : MonoBehaviour
 {
-    public float speed = 0;
-    public TextMeshProUGUI countText;
-    public GameObject winTextObject;
-    public GameObject gameOverObject;
-    public float Life = 20;
-    public float GameTime = 0;
-    
-    public int shrink_PerTime = 0;
-    public int expand_PickUp = 0;
-    public int shrink_Impact = 0;
-
     private Rigidbody rb;
+    private Material material;
+    public TextMeshProUGUI scoreTextUI;
+    public GameObject gameOverUI;
+
+    [SerializeField] private float speed = 0;
     private float movementX;
     private float movementY;
 
-    private Vector3 shrink = new Vector3(0.05f, 0.05f, 0.05f);//
+    private int score;
+    private int scoreRate;
+    
+    //public GameObject winTextObject;
+    //public GameObject gameOverObject;
+    public float maxLife = 20;
+    public float currentLife;
+    [SerializeField] private int deathRate = 0;
+    
+    //public int expand_PickUp = 0;
+    //public int shrink_Impact = 0;
 
-    // Start is called before the first frame update
     void Start()
     {
         rb = GetComponent<Rigidbody>();
+        material = GetComponent<Renderer>().material;
 
-        SetCountText();
-        winTextObject.SetActive(false);
-        gameOverObject.SetActive(false);
+        score = 0;
+        scoreRate = 1;
+        currentLife = maxLife;
+        SetScoreText();
+        if (gameOverUI != null) gameOverUI.SetActive(false);       
     }
 
     void OnMove(InputValue movementValue)
@@ -40,58 +46,72 @@ public class PlayerController : MonoBehaviour
         movementY = movementVector.y;
     }
 
-    void SetCountText(){//how to win
-        countText.text = "Time Left: " + GameTime.ToString("f0") + " s";
-        
-        if(Life <= 0){
-            gameOverObject.SetActive(true);
-            GameOver();
-        }
-        else if(GameTime <= 0){
-            winTextObject.SetActive(true);
-            GameOver();
-        }
-    }
-
     void FixedUpdate()//move
     {
         Vector3 movement = new Vector3(movementX, 0.0f, movementY);
         rb.AddForce(movement * speed);
 
-        GameTime -= Time.deltaTime;
-        
-        Life -= shrink_PerTime*Time.deltaTime;
-        rb.transform.localScale -= shrink_PerTime*Time.deltaTime*shrink;//shrink by time
-
-        SetCountText();
+        HealthCalculation();
+        if (!IsAlive())
+        {
+            EndGame();
+        }
     }
 
     private void OnTriggerEnter(Collider other) {
-        if(other.gameObject.CompareTag("PickUp")){
-            other.gameObject.SetActive(false);
+        if(other.gameObject.CompareTag("PickUp")){            
+            Destroy(other.gameObject);
+            score += 100 * scoreRate;
 
-            if((Life + expand_PickUp) < 20){
-                Life += expand_PickUp;//life++
-                rb.transform.localScale += expand_PickUp*shrink;//grow
-            }
-            else{
-                Life = 20;
-                rb.transform.localScale = new Vector3(2, 2, 2);
-            }
+            SetScoreText();
+            //if((Life + expand_PickUp) < 20){
+            //    Life += expand_PickUp;//life++
+            //    rb.transform.localScale += expand_PickUp*shrink;//grow
+            //}
+            //else{
+            //    Life = 20;
+            //    rb.transform.localScale = new Vector3(2, 2, 2);
+            //}
 
         }
     }
 
-    private void OnCollisionEnter(Collision other) {
-       if(other.gameObject.CompareTag("Magma")){
-            //other.gameObject.SetActive(false);
-            Life -= shrink_Impact;//life--
-            rb.transform.localScale -= shrink_Impact*shrink;//shrink
-
-        } 
+    void SetScoreText()
+    {
+        if (score >= 999)
+        {
+            score = 999;
+        }
+        scoreTextUI.text = "score: " + score.ToString();
     }
 
-    private void GameOver(){
-        Time.timeScale = 0;
+    void HealthCalculation()
+    {
+        currentLife -= deathRate * Time.deltaTime;
+        Color color = material.color;
+        color.a = Mathf.Clamp01(currentLife / 20.0f); // 假设selfLife的最大值为20
+        material.color = color;
     }
+
+    bool IsAlive()
+    {
+        return currentLife > (maxLife / 10);
+    }
+    public void EndGame()
+    {
+        Time.timeScale = 0; // 暂停游戏
+        if (gameOverUI != null)
+        {
+            gameOverUI.SetActive(true); // 显示游戏结束UI
+        }
+    }
+
+    //private void OnCollisionEnter(Collision other) {
+    //   if(other.gameObject.CompareTag("Magma")){
+    //        //other.gameObject.SetActive(false);
+    //        Life -= shrink_Impact;//life--
+    //        rb.transform.localScale -= shrink_Impact*shrink;//shrink
+
+    //    } 
+    //}
 }
