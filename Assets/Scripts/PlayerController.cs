@@ -18,14 +18,12 @@ public class PlayerController : MonoBehaviour
     private int score;
     private int scoreRate;
     
-    //public GameObject winTextObject;
-    //public GameObject gameOverObject;
-    public float maxLife = 20;
+    public float maxLife;
     public float currentLife;
     [SerializeField] private int deathRate = 0;
-    
-    //public int expand_PickUp = 0;
-    //public int shrink_Impact = 0;
+    public float forceReaction;
+
+    private readonly int highestScore = 999;
 
     void Start()
     {
@@ -58,29 +56,44 @@ public class PlayerController : MonoBehaviour
         }
     }
 
-    private void OnTriggerEnter(Collider other) {
-        if(other.gameObject.CompareTag("PickUp")){            
+    private void OnCollisionEnter(Collision collision)
+    {
+        if (collision.gameObject.CompareTag("Pomper") || collision.gameObject.CompareTag("HarmfulCube"))
+        {
+            // 获取碰撞点
+            ContactPoint contact = collision.contacts[0];
+            Vector3 collisionPoint = contact.point;
+
+            // 计算反作用力的方向和大小
+            Vector3 direction = (transform.position - collisionPoint).normalized;
+            Vector3 force = direction * forceReaction;
+
+            // 施加反作用力
+            rb.AddForce(force);
+            if (collision.gameObject.CompareTag("HarmfulCube"))
+            {
+                currentLife -= 1f;
+            }
+        }
+    }
+
+    private void OnTriggerEnter(Collider other)
+    {
+        if (other.gameObject.CompareTag("PickUp"))
+        {
             Destroy(other.gameObject);
             score += 100 * scoreRate;
-
+            currentLife += 1f;
             SetScoreText();
-            //if((Life + expand_PickUp) < 20){
-            //    Life += expand_PickUp;//life++
-            //    rb.transform.localScale += expand_PickUp*shrink;//grow
-            //}
-            //else{
-            //    Life = 20;
-            //    rb.transform.localScale = new Vector3(2, 2, 2);
-            //}
-
         }
     }
 
     void SetScoreText()
     {
-        if (score >= 999)
+        if (score >= highestScore)
         {
-            score = 999;
+            score = highestScore;
+            scoreTextUI.color = Color.red;
         }
         scoreTextUI.text = "score: " + score.ToString();
     }
@@ -89,7 +102,7 @@ public class PlayerController : MonoBehaviour
     {
         currentLife -= deathRate * Time.deltaTime;
         Color color = material.color;
-        color.a = Mathf.Clamp01(currentLife / 20.0f); // 假设selfLife的最大值为20
+        color.a = Mathf.Clamp01(currentLife / maxLife); // 假设selfLife的最大值为20
         material.color = color;
     }
 
@@ -105,13 +118,4 @@ public class PlayerController : MonoBehaviour
             gameOverUI.SetActive(true); // 显示游戏结束UI
         }
     }
-
-    //private void OnCollisionEnter(Collision other) {
-    //   if(other.gameObject.CompareTag("Magma")){
-    //        //other.gameObject.SetActive(false);
-    //        Life -= shrink_Impact;//life--
-    //        rb.transform.localScale -= shrink_Impact*shrink;//shrink
-
-    //    } 
-    //}
 }
