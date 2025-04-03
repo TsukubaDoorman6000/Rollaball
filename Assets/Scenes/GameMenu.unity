@@ -418,7 +418,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: Survive In Lava
+  m_Text: miniGame
 --- !u!222 &366606505
 CanvasRenderer:
   m_ObjectHideFlags: 0

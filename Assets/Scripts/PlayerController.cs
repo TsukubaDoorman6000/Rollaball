@@ -6,37 +6,46 @@ using TMPro;
 
 public class PlayerController : MonoBehaviour
 {
+    #region parameter
     private Rigidbody rb;
     private Material material;
+    private GameObject[] pickUps;
+
+    [Header("UI Elements")]
     public TextMeshProUGUI scoreTextUI;
     public GameObject gameOverUI;
 
-    [SerializeField] private float speed = 0;
+    // forTest
+    [Header("Player Settings")]
+    [SerializeField] private float moveSpeed;
+    
+    [SerializeField] private float maxHealth;
+    [SerializeField] private float currentHealth;
+    [SerializeField] private float healthDrainPerSecond;//life loss rate
+    [SerializeField] private float healthGainPerPickup;//life gain rate    
+    [SerializeField] private float healthLossOnHit = 1f;
+    [SerializeField] private float forceReaction;
+
+    // forCalculation
+    private readonly int highestScore = 9999999;//score limit
     private float movementX;
     private float movementY;
-
     private int score;
-    private int scoreRate;
-    
-    public float maxLife;
-    public float currentLife;
-    [SerializeField] private int deathRate = 0;
-    public float forceReaction;
-
-    private readonly int highestScore = 999;
+    private int loopNum;
+    #endregion
 
     void Start()
     {
         rb = GetComponent<Rigidbody>();
         material = GetComponent<Renderer>().material;
-
         score = 0;
-        scoreRate = 1;
-        currentLife = maxLife;
-        SetScoreText();
-        if (gameOverUI != null) gameOverUI.SetActive(false);       
-    }
+        loopNum = 1;
+        currentHealth = maxHealth;
 
+        SetScoreText();
+        if (gameOverUI != null) gameOverUI.SetActive(false);
+        pickUps = GameObject.FindGameObjectsWithTag("PickUp");
+    }
     void OnMove(InputValue movementValue)
     {
         Vector2 movementVector = movementValue.Get<Vector2>();
@@ -44,78 +53,148 @@ public class PlayerController : MonoBehaviour
         movementY = movementVector.y;
     }
 
-    void FixedUpdate()//move
+    void FixedUpdate()
     {
-        Vector3 movement = new Vector3(movementX, 0.0f, movementY);
-        rb.AddForce(movement * speed);
+        Vector3 movement = new (movementX, 0.0f, movementY);
+        rb.AddForce(movement * moveSpeed);
 
-        HealthCalculation();
-        if (!IsAlive())
-        {
-            EndGame();
-        }
+        currentHealth -= healthDrainPerSecond * Time.deltaTime;        
+        currentHealth = Mathf.Clamp(currentHealth, 0, maxHealth);
+        //Debug.Log(currentHealth);
+        UpdateColorByHealth();
+        if (!IsAlive()) EndGame();
     }
 
+    #region rigidbody
+    // collision
     private void OnCollisionEnter(Collision collision)
     {
-        if (collision.gameObject.CompareTag("Pomper") || collision.gameObject.CompareTag("HarmfulCube"))
+        string tag = collision.gameObject.tag;
+        if (tag == "Pomper" || tag == "HarmfulCube")
         {
-            // 获取碰撞点
+            PlayAudio(collision.gameObject);
+
+            // calculate the collision point
             ContactPoint contact = collision.contacts[0];
-            Vector3 collisionPoint = contact.point;
+            Vector3 direction = (transform.position - contact.point).normalized;
+            rb.AddForce(direction * forceReaction);
 
-            // 计算反作用力的方向和大小
-            Vector3 direction = (transform.position - collisionPoint).normalized;
-            Vector3 force = direction * forceReaction;
-
-            // 施加反作用力
-            rb.AddForce(force);
-            if (collision.gameObject.CompareTag("HarmfulCube"))
+            if (tag == "HarmfulCube")
             {
-                currentLife -= 1f;
+                currentHealth -= healthLossOnHit; // health loss
             }
         }
     }
 
+    //collection
     private void OnTriggerEnter(Collider other)
     {
         if (other.gameObject.CompareTag("PickUp"))
         {
-            Destroy(other.gameObject);
-            score += 100 * scoreRate;
-            currentLife += 1f;
+            PlayAudio(other.gameObject);
+            HideObjectVisuals(other.gameObject);
+
+            score += 10 * loopNum;
+            currentHealth += healthGainPerPickup;
             SetScoreText();
+
+            float delay = GetClipLength(other.gameObject);
+            StartCoroutine(DisableAfterSound(other.gameObject, delay));            
+        }
+    }
+    #endregion
+
+    #region method
+    private void PlayAudio(GameObject obj)
+    {
+        AudioSource audioSource = obj.GetComponent<AudioSource>();
+        if (audioSource != null && audioSource.clip != null)
+        {
+            audioSource.Play();
+        }
+    }
+    private float GetClipLength(GameObject obj)
+    {
+        AudioSource audioSource = obj.GetComponent<AudioSource>();
+        return (audioSource != null && audioSource.clip != null) ? audioSource.clip.length : 0f;
+    }
+    private void HideObjectVisuals(GameObject obj)
+    {
+        MeshRenderer mesh = obj.GetComponent<MeshRenderer>();
+        if (mesh != null) mesh.enabled = false;
+
+        Collider col = obj.GetComponent<Collider>();
+        if (col != null) col.enabled = false;
+    }
+    private IEnumerator DisableAfterSound(GameObject obj, float delay)
+    {
+        yield return new WaitForSeconds(delay);
+        obj.SetActive(false);
+        if (AllPickUpsCollected())
+        {
+            NextLoop();
+        }
+    }
+    private void UpdateColorByHealth()
+    {        
+        Color color = material.color;
+        color.a = Mathf.Clamp01(currentHealth / maxHealth); // health down, transparent down
+        material.color = color;
+    }
+    private void NextLoop()
+    {
+        loopNum++;
+        transform.position = new Vector3(0, 0, -8f); // reset position
+        ReactivatePickUps(); // reset pickUps
+        SetScoreText(); // change loopNum
+    }
+    private void ReactivatePickUps()
+    {
+        foreach (GameObject pickUp in pickUps)
+        {
+            pickUp.SetActive(true);
+            MeshRenderer mesh = pickUp.GetComponent<MeshRenderer>();
+            if (mesh != null) mesh.enabled = true;
+            Collider col = pickUp.GetComponent<Collider>();
+            if (col != null) col.enabled = true;
         }
     }
 
-    void SetScoreText()
+    // judge
+    private bool IsAlive()
+    {
+        return currentHealth > (maxHealth / 15);
+    }
+    private bool AllPickUpsCollected()
+    {
+        foreach (GameObject pickUp in pickUps)
+        {
+            if (pickUp.activeSelf)
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // UI
+    private void SetScoreText()
     {
         if (score >= highestScore)
         {
             score = highestScore;
-            scoreTextUI.color = Color.red;
+            scoreTextUI.color = Color.blue;
         }
-        scoreTextUI.text = "score: " + score.ToString();
+        scoreTextUI.text = "score: " + score.ToString()
+            + "\n" + "X " + loopNum.ToString();// Magnification
     }
-
-    void HealthCalculation()
+    private void EndGame()
     {
-        currentLife -= deathRate * Time.deltaTime;
-        Color color = material.color;
-        color.a = Mathf.Clamp01(currentLife / maxLife); // 假设selfLife的最大值为20
-        material.color = color;
-    }
-
-    bool IsAlive()
-    {
-        return currentLife > (maxLife / 10);
-    }
-    public void EndGame()
-    {
-        Time.timeScale = 0; // 暂停游戏
+        Time.timeScale = 0; // stop the game
         if (gameOverUI != null)
         {
-            gameOverUI.SetActive(true); // 显示游戏结束UI
+            gameOverUI.SetActive(true); // show game over UI
         }
     }
+    #endregion
 }

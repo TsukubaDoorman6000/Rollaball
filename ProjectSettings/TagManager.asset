@@ -7,6 +7,7 @@ TagManager:
   - PickUp
   - Pomper
   - HarmfulCube
+  - PickUpEX
   layers:
   - Default
   - TransparentFX
